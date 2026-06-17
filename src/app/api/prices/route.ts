@@ -8,9 +8,14 @@ const VALID_PERIODS = ['3mo', '6mo', '1y', '2y', '5y'];
 
 // Strip trailing slash from Railway URL
 function pythonUrl(): string | null {
-  const url = process.env.PYTHON_SERVICE_URL;
+  let url = process.env.PYTHON_SERVICE_URL;
   if (!url || url.trim() === '') return null;
-  return url.trim().replace(/\/+$/, '');
+  url = url.trim().replace(/\/+$/, '');
+  // Add protocol if missing (common Vercel env var mistake)
+  if (!/^https?:\/\//.test(url)) {
+    url = `https://${url}`;
+  }
+  return url;
 }
 
 export async function GET(req: NextRequest) {

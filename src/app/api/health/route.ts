@@ -1,9 +1,14 @@
 import { NextResponse } from 'next/server';
 
 function pythonUrl(): string | null {
-  const url = process.env.PYTHON_SERVICE_URL;
+  let url = process.env.PYTHON_SERVICE_URL;
   if (!url || url.trim() === '') return null;
-  return url.trim().replace(/\/+$/, '');
+  url = url.trim().replace(/\/+$/, '');
+  // Add protocol if missing (common Vercel env var mistake)
+  if (!/^https?:\/\//.test(url)) {
+    url = `https://${url}`;
+  }
+  return url;
 }
 
 export async function GET() {
