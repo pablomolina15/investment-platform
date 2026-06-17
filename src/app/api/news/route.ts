@@ -9,11 +9,17 @@ interface NewsItem {
   ticker?: string;
 }
 
-// Yahoo Finance RSS — completamente gratuito, sin API key
+function decodeHtml(s: string) {
+  return s
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ');
+}
+
 async function fetchYahooRSS(ticker: string): Promise<NewsItem[]> {
   const url = `https://feeds.finance.yahoo.com/rss/2.0/headline?s=${ticker}&region=US&lang=en-US`;
   const res = await fetch(url, {
     headers: { 'User-Agent': 'Mozilla/5.0' },
+    signal: AbortSignal.timeout(10000),
     next: { revalidate: 1800 },
   });
   if (!res.ok) throw new Error(`RSS ${res.status}`);
@@ -34,38 +40,35 @@ async function fetchYahooRSS(ticker: string): Promise<NewsItem[]> {
 
     if (title && link) {
       items.push({
-        title: decodeHtml(title.trim()),
-        summary: decodeHtml(desc.replace(/<[^>]+>/g, '').trim().slice(0, 200)),
-        url: link.trim(),
-        source: source.trim(),
+        title:       decodeHtml(title.trim()),
+        summary:     decodeHtml(desc.replace(/<[^>]+>/g, '').trim().slice(0, 220)),
+        url:         link.trim(),
+        source:      source.trim(),
         publishedAt: pubDate ? new Date(pubDate).toISOString() : new Date().toISOString(),
-        ticker: ticker.toUpperCase(),
+        ticker:      ticker.toUpperCase(),
       });
     }
   }
   return items;
 }
 
-function decodeHtml(s: string) {
-  return s.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ');
-}
-
-// Market general news from multiple tickers
 async function fetchMarketNews(): Promise<NewsItem[]> {
   const tickers = ['SPY', 'QQQ', 'AAPL', 'MSFT', 'NVDA'];
   const results = await Promise.allSettled(tickers.map(t => fetchYahooRSS(t)));
+
   const all: NewsItem[] = [];
   results.forEach(r => { if (r.status === 'fulfilled') all.push(...r.value); });
 
-  // Deduplicate by title similarity
   const seen = new Set<string>();
-  return all.filter(item => {
-    const key = item.title.slice(0, 40).toLowerCase();
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  }).sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()).slice(0, 20);
+  return all
+    .filter(item => {
+      const key = item.title.slice(0, 50).toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime())
+    .slice(0, 20);
 }
 
 export async function GET(req: NextRequest) {
@@ -73,10 +76,12 @@ export async function GET(req: NextRequest) {
   const ticker = searchParams.get('ticker');
 
   try {
-    const news = ticker ? await fetchYahooRSS(ticker.toUpperCase()) : await fetchMarketNews();
+    const news = ticker
+      ? await fetchYahooRSS(ticker.toUpperCase())
+      : await fetchMarketNews();
     return NextResponse.json({ news, source: 'yahoo_rss', count: news.length });
-  } catch {
-    // Demo fallback
+  } catch (e) {
+    console.error('[news] RSS fetch failed:', e);
     const demo = generateDemoNews(ticker ?? 'MARKET');
     return NextResponse.json({ news: demo, source: 'demo', count: demo.length });
   }
@@ -84,20 +89,18 @@ export async function GET(req: NextRequest) {
 
 function generateDemoNews(ticker: string): NewsItem[] {
   const headlines = [
-    [`${ticker}: Resultados trimestrales superan expectativas de analistas`, 'Los ingresos crecieron un 12% interanual, impulsados por la demanda en mercados emergentes.'],
-    [`Analistas elevan precio objetivo de ${ticker} tras sólido guidance`, 'Varios bancos de inversión revisan al alza sus estimaciones para el próximo ejercicio.'],
-    [`${ticker} anuncia expansión de su programa de recompra de acciones`, 'La compañía destinará 5.000 millones adicionales a la recompra durante los próximos 18 meses.'],
-    [`Mercados globales en espera de datos macro clave esta semana`, 'Los inversores monitorizan de cerca las decisiones de política monetaria de la Fed.'],
-    [`${ticker}: Nuevo contrato estratégico impulsa perspectivas de crecimiento`, 'El acuerdo podría añadir entre 200 y 400 millones a los ingresos del próximo año.'],
-    [`Sector tecnológico lidera ganancias ante rotación del mercado`, 'El movimiento refleja renovado apetito por activos de crecimiento en el entorno actual.'],
+    [`${ticker}: Resultados trimestrales superan expectativas`, 'Los ingresos crecieron un 12% interanual impulsados por demanda en mercados emergentes.'],
+    [`Analistas elevan precio objetivo de ${ticker}`, 'Varios bancos de inversión revisan al alza sus estimaciones para el próximo ejercicio.'],
+    [`${ticker} anuncia expansión de recompra de acciones`, 'La compañía destinará 5.000 millones adicionales durante los próximos 18 meses.'],
+    [`Mercados globales en espera de datos macro`, 'Inversores monitorean de cerca las decisiones de política monetaria de la Fed.'],
+    [`${ticker}: Nuevo contrato estratégico impulsa perspectivas`, 'El acuerdo podría añadir entre 200 y 400 millones a los ingresos del próximo año.'],
+    [`Sector tecnológico lidera ganancias`, 'El movimiento refleja renovado apetito por activos de crecimiento en el entorno actual.'],
   ];
-
   return headlines.map(([title, summary], i) => ({
-    title,
-    summary,
-    url: '#',
-    source: ['Reuters', 'Bloomberg', 'Financial Times', 'WSJ', 'MarketWatch', 'Seeking Alpha'][i % 6],
+    title, summary,
+    url:         '#',
+    source:      ['Reuters','Bloomberg','Financial Times','WSJ','MarketWatch','Seeking Alpha'][i % 6],
     publishedAt: new Date(Date.now() - i * 3_600_000).toISOString(),
-    ticker: ticker.toUpperCase(),
+    ticker:      ticker.toUpperCase(),
   }));
 }
