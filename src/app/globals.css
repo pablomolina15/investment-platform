@@ -112,3 +112,15 @@ body {
   background: linear-gradient(90deg, #00d4ff, #00ff88);
   border-radius: 1px;
 }
+
+/* ─── Mobile bottom tab bar safe area ──────────────────────────────────────── */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 8px);
+}
+
+/* ─── Extra bottom padding on mobile to avoid content behind tab bar ─────── */
+@media (max-width: 767px) {
+  main {
+    padding-bottom: 5rem; /* 80px — height of bottom tab bar */
+  }
+}

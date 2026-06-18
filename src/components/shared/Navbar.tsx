@@ -8,22 +8,28 @@ import { clsx } from 'clsx';
 import UserMenu from '@/components/auth/UserMenu';
 import AuthModal from '@/components/auth/AuthModal';
 
+const LINKS = [
+  { href: '/',            label: 'Dashboard',   icon: Activity,   ac: 'bg-accent-cyan/10 text-accent-cyan',    hc: 'hover:text-accent-cyan' },
+  { href: '/technical',   label: 'Técnico',     icon: BarChart2,  ac: 'bg-accent-cyan/10 text-accent-cyan',    hc: 'hover:text-accent-cyan' },
+  { href: '/fundamental', label: 'Fundamental', icon: BookOpen,   ac: 'bg-accent-green/10 text-accent-green',  hc: 'hover:text-accent-green' },
+  { href: '/ml',          label: 'IA Predict',  icon: Brain,      ac: 'bg-accent-purple/10 text-accent-purple',hc: 'hover:text-accent-purple' },
+  { href: '/compare',     label: 'Comparar',    icon: GitCompare, ac: 'bg-accent-yellow/10 text-accent-yellow',hc: 'hover:text-accent-yellow' },
+  { href: '/news',        label: 'Noticias',    icon: Newspaper,  ac: 'bg-accent-cyan/10 text-accent-cyan',    hc: 'hover:text-accent-cyan' },
+  { href: '/watchlist',   label: 'Watchlist',   icon: Star,       ac: 'bg-accent-yellow/10 text-accent-yellow',hc: 'hover:text-accent-yellow' },
+];
+
+// Bottom 5 for mobile tab bar
+const MOBILE_LINKS = [
+  LINKS[0], LINKS[1], LINKS[2], LINKS[3], LINKS[6],
+];
+
 export default function Navbar() {
   const pathname = usePathname();
   const [showAuth, setShowAuth] = useState(false);
 
-  const links = [
-    { href: '/',            label: 'Dashboard',   icon: Activity,   ac: 'bg-accent-cyan/10 text-accent-cyan',    hc: 'hover:text-accent-cyan' },
-    { href: '/technical',   label: 'Técnico',     icon: BarChart2,  ac: 'bg-accent-cyan/10 text-accent-cyan',    hc: 'hover:text-accent-cyan' },
-    { href: '/fundamental', label: 'Fundamental', icon: BookOpen,   ac: 'bg-accent-green/10 text-accent-green',  hc: 'hover:text-accent-green' },
-    { href: '/ml',          label: 'IA Predict',  icon: Brain,      ac: 'bg-accent-purple/10 text-accent-purple',hc: 'hover:text-accent-purple' },
-    { href: '/compare',     label: 'Comparar',    icon: GitCompare, ac: 'bg-accent-yellow/10 text-accent-yellow',hc: 'hover:text-accent-yellow' },
-    { href: '/news',        label: 'Noticias',    icon: Newspaper,  ac: 'bg-accent-cyan/10 text-accent-cyan',    hc: 'hover:text-accent-cyan' },
-    { href: '/watchlist',   label: 'Watchlist',   icon: Star,       ac: 'bg-accent-yellow/10 text-accent-yellow',hc: 'hover:text-accent-yellow' },
-  ];
-
   return (
     <>
+      {/* ── Desktop top navbar ─────────────────────────────────────────────── */}
       <header className="fixed top-0 left-0 right-0 z-40 border-b border-border bg-bg-primary/90 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between h-14 gap-4">
           <Link href="/" className="flex items-center gap-2 flex-shrink-0">
@@ -35,8 +41,9 @@ export default function Navbar() {
             </span>
           </Link>
 
-          <nav className="flex items-center gap-0.5 overflow-x-auto scrollbar-none flex-1 justify-center">
-            {links.map(({ href, label, icon: Icon, ac, hc }) => {
+          {/* Desktop nav — hidden on mobile (replaced by bottom bar) */}
+          <nav className="hidden md:flex items-center gap-0.5 overflow-x-auto scrollbar-none flex-1 justify-center">
+            {LINKS.map(({ href, label, icon: Icon, ac, hc }) => {
               const active = pathname === href || (href !== '/' && pathname.startsWith(href));
               return (
                 <Link key={href} href={href}
@@ -58,6 +65,26 @@ export default function Navbar() {
           </div>
         </div>
       </header>
+
+      {/* ── Mobile bottom tab bar ──────────────────────────────────────────── */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-bg-primary/95 backdrop-blur-md border-t border-border">
+        <div className="flex items-center justify-around px-2 py-2 pb-safe">
+          {MOBILE_LINKS.map(({ href, label, icon: Icon, ac }) => {
+            const active = pathname === href || (href !== '/' && pathname.startsWith(href));
+            return (
+              <Link key={href} href={href}
+                className={clsx(
+                  'flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-all duration-150 min-w-0',
+                  active ? ac : 'text-text-muted'
+                )}>
+                <Icon className="w-5 h-5 flex-shrink-0" />
+                <span className="text-[10px] font-mono truncate">{label}</span>
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
+
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
     </>
   );
