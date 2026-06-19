@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import Navbar from '@/components/shared/Navbar';
 import TickerSearch from '@/components/shared/TickerSearch';
 import ShortTermOpportunities from '@/components/shared/ShortTermOpportunities';
+import OpportunityScanner from '@/components/shared/OpportunityScanner';  // ← añade esta línea
 import { POPULAR_TICKERS } from '@/types/finance';
 import { formatPrice } from '@/lib/indicators';
 import {
@@ -197,8 +198,11 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* Short-term opportunities — real momentum scan */}
+{/* Short-term opportunities — real momentum scan */}
         <ShortTermOpportunities />
+
+        {/* Multi-signal opportunity scanner */}
+        <OpportunityScanner />
 
         {/* Feature sections */}
         <section className="pb-16">

@@ -206,8 +206,8 @@ function OpportunityCard({ opp, index, onClick }: {
       {opp.catalysts.length > 0 && (
         <div className="flex flex-wrap gap-1 mb-2">
           {/* Deduplicate catalyst types */}
-          {[...new Map(opp.catalysts.map(c => [c.type, c])).values()].slice(0, 3).map((cat, i) => (
-            <CatalystBadge key={i} type={cat.type} />
+          {Array.from(new Map(opp.catalysts.map(c => [c.type, c])).values()).slice(0, 3).map((cat, i) => (
+                        <CatalystBadge key={i} type={cat.type} />
           ))}
         </div>
       )}
