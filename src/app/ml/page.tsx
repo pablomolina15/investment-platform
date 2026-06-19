@@ -9,7 +9,7 @@ import MLPredictionChart from '@/components/ml/MLPredictionChart';
 import NewsFeed from '@/components/news/NewsFeed';
 import { useTechnical, useMLPrediction } from '@/hooks/useFinanceData';
 import { clsx } from 'clsx';
-import { Brain, Zap, RefreshCw, AlertTriangle, ChevronRight, Clock, Layers, Cpu, Network } from 'lucide-react';
+import { Brain, Zap, RefreshCw, AlertTriangle, ChevronRight, Clock, Layers, Cpu, Network, Info } from 'lucide-react';
 
 const MODELS = [
   { id: 'random-forest',     name: 'Random Forest',     icon: Layers,  description: 'Ensemble de 200 árboles. Rápido, robusto, feature importance nativa.',                             tags: ['~5-10s', 'Robusto', 'Interpretable'],     color: 'cyan' },
@@ -24,6 +24,40 @@ const modelColorMap: Record<string, { active: string; icon: string; tag: string 
   purple: { active: 'border-accent-purple/50 bg-accent-purple/8',icon: 'text-accent-purple bg-accent-purple/15 border-accent-purple/30',tag: 'text-accent-purple' },
   green:  { active: 'border-accent-green/50 bg-accent-green/8',  icon: 'text-accent-green bg-accent-green/15 border-accent-green/30',   tag: 'text-accent-green'  },
 };
+
+// ── High-uncertainty warning ──────────────────────────────────────────────────
+// Shown when predicted change exceeds ±10% — signals the model may be
+// extrapolating a strong historical trend rather than a short-term signal.
+const HIGH_UNCERTAINTY_THRESHOLD = 0.10;
+
+function UncertaintyWarning({ changePct, ticker }: { changePct: number; ticker: string }) {
+  const isExtreme = Math.abs(changePct) >= HIGH_UNCERTAINTY_THRESHOLD;
+  if (!isExtreme) return null;
+
+  const isBearish = changePct < 0;
+
+  return (
+    <div className={clsx(
+      'flex items-start gap-3 rounded-xl px-4 py-3 mb-4 border text-sm font-mono',
+      isBearish
+        ? 'bg-accent-yellow/8 border-accent-yellow/30 text-accent-yellow'
+        : 'bg-accent-cyan/8 border-accent-cyan/30 text-accent-cyan',
+    )}>
+      <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
+      <div>
+        <p className="font-bold mb-0.5 text-xs uppercase tracking-wide">
+          Predicción de alta incertidumbre — {Math.abs(changePct * 100).toFixed(1)}% en {ticker}
+        </p>
+        <p className="text-xs opacity-80 leading-relaxed">
+          {isBearish
+            ? `El modelo detecta una tendencia bajista pronunciada en el historial reciente de ${ticker}. Esta predicción puede estar extrapolando un patrón pasado en lugar de señalar un movimiento inminente. Contrasta con el análisis técnico antes de actuar.`
+            : `El modelo detecta momentum alcista muy fuerte en ${ticker}. Las predicciones superiores al 10% en pocos días son infrecuentes y deben tomarse con cautela. Contrasta con el análisis técnico antes de actuar.`
+          }
+        </p>
+      </div>
+    </div>
+  );
+}
 
 function MLContent() {
   const searchParams = useSearchParams();
@@ -52,6 +86,15 @@ function MLContent() {
 
   const selectedModel = MODELS.find(m => m.id === model)!;
   const colors = modelColorMap[selectedModel.color];
+
+  // Compute predicted change % from first and last prediction point
+  const predictedChangePct = (() => {
+    if (!mlData?.predictions?.length) return 0;
+    const first = mlData.predictions[0].predicted_price;
+    const last  = mlData.predictions[mlData.predictions.length - 1].predicted_price;
+    const currentPrice = techData?.data?.[techData.data.length - 1]?.close ?? first;
+    return (last - currentPrice) / (currentPrice + 1e-9);
+  })();
 
   return (
     <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-20 pb-12">
@@ -120,7 +163,7 @@ function MLContent() {
       {/* Pipeline strip */}
       <div className="bg-bg-card border border-border rounded-xl p-3 mb-5">
         <div className="flex flex-wrap items-center gap-1.5 text-xs font-mono text-text-secondary">
-          {['3 años OHLCV',
+          {['6 meses OHLCV',
             model === 'lstm' ? 'LSTM(128→64→32)' : model === 'gradient-boosting' ? '150 estimadores' : '200 árboles',
             model === 'lstm' ? 'Monte Carlo Dropout (×50)' : 'TimeSeriesSplit CV',
             model === 'lstm' ? 'Intervalos 90% CI' : 'Feature importance',
@@ -140,7 +183,7 @@ function MLContent() {
           <div>
             <p className="font-bold mb-0.5">Error en la predicción</p>
             <p className="text-accent-red/80 text-xs">{error}</p>
-            {model === 'lstm' && <p className="text-xs text-text-muted mt-1">💡 El modelo LSTM requiere el microservicio Python con TensorFlow instalado.</p>}
+            {model === 'lstm' && <p className="text-xs text-text-muted mt-1">💡 El modelo LSTM requiere el microservicio Python activo en Railway.</p>}
           </div>
         </div>
       )}
@@ -152,7 +195,7 @@ function MLContent() {
           </div>
           <p className="font-display font-bold text-lg text-text-primary mb-1">Entrenando {selectedModel.name}…</p>
           <p className="text-sm text-text-muted font-mono">
-            {model === 'lstm' ? 'Construyendo secuencias → Entrenando red LSTM → Monte Carlo Dropout…' : `Descargando 3 años → Calculando features → Entrenando ${model === 'random-forest' ? '200 árboles' : '150 estimadores'}…`}
+            {model === 'lstm' ? 'Construyendo secuencias → Entrenando red LSTM → Monte Carlo Dropout…' : `Descargando datos → Calculando features → Entrenando ${model === 'random-forest' ? '200 árboles' : '150 estimadores'}…`}
           </p>
           {model === 'lstm' && <p className="text-xs text-text-muted font-mono mt-2 opacity-60">El primer entrenamiento LSTM puede tardar 60-90 segundos</p>}
         </div>
@@ -179,6 +222,11 @@ function MLContent() {
               </button>
             ))}
           </div>
+
+          {/* ✅ High-uncertainty warning — shown when |change| > 10% */}
+          {activeTab === 'prediction' && (
+            <UncertaintyWarning changePct={predictedChangePct} ticker={ticker} />
+          )}
 
           {activeTab === 'prediction' && (
             <div className="bg-bg-card border border-border rounded-2xl p-5 sm:p-7 animate-fade-in opacity-0" style={{ animationFillMode:'forwards' }}>
