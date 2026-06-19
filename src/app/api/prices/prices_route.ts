@@ -1,17 +1,17 @@
+// src/app/api/prices/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { processOHLCV, detectSignals } from '@/lib/indicators';
 import { generateDemoPrices } from '@/lib/demo-data';
 import { getCachedPrices, setCachedPrices } from '@/lib/supabase';
 import type { OHLCV, TechnicalResponse } from '@/types/finance';
 
-const VALID_PERIODS = ['3mo', '6mo', '1y', '2y', '5y'];
+// ✅ FIX: Added '5d' and '1mo' that the technical page sends for short periods
+const VALID_PERIODS = ['5d', '1mo', '3mo', '6mo', '1y', '2y', '5y'];
 
-// Strip trailing slash from Railway URL
 function pythonUrl(): string | null {
   let url = process.env.PYTHON_SERVICE_URL;
   if (!url || url.trim() === '') return null;
   url = url.trim().replace(/\/+$/, '');
-  // Add protocol if missing (common Vercel env var mistake)
   if (!/^https?:\/\//.test(url)) {
     url = `https://${url}`;
   }
@@ -58,7 +58,7 @@ export async function GET(req: NextRequest) {
   // 3. Yahoo Finance direct (fallback)
   try {
     const yahooData = await fetchYahooFinance(ticker, period);
-    if (yahooData.length > 10) {
+    if (yahooData.length > 5) {
       const processed = processOHLCV(yahooData);
       const signals   = detectSignals(processed);
       const response: Omit<TechnicalResponse, 'source'> = {
@@ -75,7 +75,7 @@ export async function GET(req: NextRequest) {
   // 4. Demo — last resort
   console.warn(`[prices] Falling back to demo data for ${ticker}`);
   const daysMap: Record<string, number> = {
-    '3mo': 90, '6mo': 180, '1y': 365, '2y': 730, '5y': 1825,
+    '5d': 7, '1mo': 30, '3mo': 90, '6mo': 180, '1y': 365, '2y': 730, '5y': 1825,
   };
   const raw       = generateDemoPrices(ticker, daysMap[period] ?? 365);
   const processed = processOHLCV(raw);
@@ -88,11 +88,26 @@ export async function GET(req: NextRequest) {
 }
 
 async function fetchYahooFinance(ticker: string, period: string): Promise<OHLCV[]> {
+  // ✅ FIX: Added intervals for the new short periods
   const intervalMap: Record<string, string> = {
-    '3mo': '1d', '6mo': '1d', '1y': '1d', '2y': '1wk', '5y': '1wk',
+    '5d':  '30m',  // intraday for 5-day view
+    '1mo': '1d',
+    '3mo': '1d',
+    '6mo': '1d',
+    '1y':  '1d',
+    '2y':  '1wk',
+    '5y':  '1wk',
   };
   const interval = intervalMap[period] ?? '1d';
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=${period}&interval=${interval}&includePrePost=false`;
+
+  // Yahoo uses different range param for intraday
+  const rangeMap: Record<string, string> = {
+    '5d': '5d', '1mo': '1mo', '3mo': '3mo',
+    '6mo': '6mo', '1y': '1y', '2y': '2y', '5y': '5y',
+  };
+  const range = rangeMap[period] ?? period;
+
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=${range}&interval=${interval}&includePrePost=false`;
 
   const res = await fetch(url, {
     headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'application/json' },

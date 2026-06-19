@@ -1,3 +1,4 @@
+// src/app/api/momentum-scan/route.ts
 import { NextResponse } from 'next/server';
 import { processOHLCV, detectSignals } from '@/lib/indicators';
 import type { OHLCV, TechnicalData } from '@/types/finance';
@@ -15,6 +16,13 @@ const SCAN_UNIVERSE = [
   'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA',
   'AMD', 'NFLX', 'CRM', 'AVGO', 'COIN', 'PLTR', 'SHOP', 'UBER',
 ];
+
+// ✅ Minimum score to be shown as an "opportunity". Below this threshold,
+// the stock shows no real bullish conviction and would only mislead users.
+const MIN_SCORE_THRESHOLD = 45;
+
+// Maximum candidates to display
+const MAX_CANDIDATES = 6;
 
 interface MomentumCandidate {
   ticker: string;
@@ -91,9 +99,6 @@ function scoreMomentum(data: TechnicalData[]): MomentumCandidate | null {
     : -100;
 
   // ── Scoring heuristic for SHORT-TERM (< 15 días) continuation ──────────────
-  // Premia: momentum reciente positivo, RSI en zona de fuerza (no sobrecomprado
-  // extremo), tendencia alcista confirmada, MACD cruzando al alza, precio cerca
-  // pero no excedido de la banda superior de Bollinger.
   let score = 0;
   const reasons: string[] = [];
 
@@ -101,16 +106,24 @@ function scoreMomentum(data: TechnicalData[]): MomentumCandidate | null {
   if (changePct5d > 0) {
     score += Math.min(changePct5d * 3, 30);
     if (changePct5d > 3) reasons.push(`+${changePct5d.toFixed(1)}% últimos 5 días`);
+  } else {
+    // ✅ FIX: Penalize negative 5d momentum explicitly (was just not adding points before)
+    score += Math.max(changePct5d * 2, -20);
   }
 
   // RSI en zona de fuerza saludable (55-70) — momentum sin sobrecompra extrema
-  if (last.rsi >= 50 && last.rsi <= 70) {
+  if (last.rsi >= 55 && last.rsi <= 70) {
     score += 20;
     reasons.push(`RSI ${last.rsi.toFixed(0)} (zona fuerte)`);
   } else if (last.rsi > 70 && last.rsi < 80) {
-    score += 8; // sobrecomprado pero aún con inercia
+    score += 5; // sobrecomprado pero aún con inercia
   } else if (last.rsi > 80) {
-    score -= 10; // sobrecompra extrema — riesgo de corrección
+    score -= 15; // sobrecompra extrema — riesgo de corrección
+  } else if (last.rsi < 45) {
+    // ✅ FIX: Penalize weak RSI more aggressively (was only penalising RSI<50 implicitly)
+    score -= 15;
+  } else if (last.rsi >= 45 && last.rsi < 55) {
+    score += 0; // neutral zone — no points, no penalty
   }
 
   // Tendencia alcista confirmada (SMA50 > SMA200)
@@ -134,6 +147,9 @@ function scoreMomentum(data: TechnicalData[]): MomentumCandidate | null {
   // Precio sobre SMA50 — soporte de corto plazo
   if (aboveSma50) {
     score += 10;
+  } else {
+    // ✅ FIX: Below SMA50 is a negative signal, not neutral
+    score -= 8;
   }
 
   // Cerca de banda superior de Bollinger sin excederla mucho — breakout potencial
@@ -142,11 +158,14 @@ function scoreMomentum(data: TechnicalData[]): MomentumCandidate | null {
     reasons.push('Cerca de ruptura (Bollinger superior)');
   } else if (pctFromBbUpper > 5) {
     score -= 15; // muy extendido, riesgo de pullback
+  } else if (pctFromBbUpper < -10) {
+    // ✅ FIX: Price well below BB upper means weak momentum
+    score -= 5;
   }
 
   // Penalizar tendencia bajista o death cross
-  if (signals.trend === 'bearish') score -= 20;
-  if (signals.death_cross) score -= 25;
+  if (signals.trend === 'bearish') score -= 25;
+  if (signals.death_cross) score -= 30;
 
   return {
     ticker: '', // filled by caller
@@ -176,15 +195,23 @@ export async function GET() {
     })
   );
 
-  const candidates = results
+  const allScored = results
     .filter((r): r is MomentumCandidate => r !== null)
-    .sort((a, b) => b.momentumScore - a.momentumScore)
-    .slice(0, 6);
+    .sort((a, b) => b.momentumScore - a.momentumScore);
+
+  // ✅ FIX: Only show candidates that pass the minimum quality threshold.
+  // This prevents low-conviction stocks from appearing as "opportunities".
+  const candidates = allScored
+    .filter(c => c.momentumScore >= MIN_SCORE_THRESHOLD)
+    .slice(0, MAX_CANDIDATES);
 
   return NextResponse.json({
     candidates,
     scanned_at: new Date().toISOString(),
     universe_size: SCAN_UNIVERSE.length,
+    qualified: candidates.length,          // how many passed the threshold
+    total_scanned: allScored.length,       // debug info
+    min_score_threshold: MIN_SCORE_THRESHOLD,
     source: base ? 'live' : 'yahoo_direct',
     disclaimer: 'Análisis técnico automatizado basado en momentum e indicadores. No constituye recomendación de inversión.',
   });
