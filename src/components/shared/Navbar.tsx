@@ -3,19 +3,19 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
-import { BarChart2, BookOpen, Activity, Brain, GitCompare, Star, Newspaper } from 'lucide-react';
+import { BarChart2, BookOpen, Activity, Brain, GitCompare, Briefcase, Newspaper } from 'lucide-react';
 import { clsx } from 'clsx';
 import UserMenu from '@/components/auth/UserMenu';
 import AuthModal from '@/components/auth/AuthModal';
 
 const LINKS = [
-  { href: '/',            label: 'Dashboard',   icon: Activity,   ac: 'bg-accent-cyan/10 text-accent-cyan',    hc: 'hover:text-accent-cyan' },
-  { href: '/technical',   label: 'Técnico',     icon: BarChart2,  ac: 'bg-accent-cyan/10 text-accent-cyan',    hc: 'hover:text-accent-cyan' },
-  { href: '/fundamental', label: 'Fundamental', icon: BookOpen,   ac: 'bg-accent-green/10 text-accent-green',  hc: 'hover:text-accent-green' },
-  { href: '/ml',          label: 'IA Predict',  icon: Brain,      ac: 'bg-accent-purple/10 text-accent-purple',hc: 'hover:text-accent-purple' },
-  { href: '/compare',     label: 'Comparar',    icon: GitCompare, ac: 'bg-accent-yellow/10 text-accent-yellow',hc: 'hover:text-accent-yellow' },
-  { href: '/news',        label: 'Noticias',    icon: Newspaper,  ac: 'bg-accent-cyan/10 text-accent-cyan',    hc: 'hover:text-accent-cyan' },
-  { href: '/watchlist',   label: 'Watchlist',   icon: Star,       ac: 'bg-accent-yellow/10 text-accent-yellow',hc: 'hover:text-accent-yellow' },
+  { href: '/',            label: 'Dashboard',   icon: Activity,   ac: 'bg-accent-cyan/10 text-accent-cyan',     hc: 'hover:text-accent-cyan' },
+  { href: '/technical',   label: 'Técnico',     icon: BarChart2,  ac: 'bg-accent-cyan/10 text-accent-cyan',     hc: 'hover:text-accent-cyan' },
+  { href: '/fundamental', label: 'Fundamental', icon: BookOpen,   ac: 'bg-accent-green/10 text-accent-green',   hc: 'hover:text-accent-green' },
+  { href: '/ml',          label: 'IA Predict',  icon: Brain,      ac: 'bg-accent-purple/10 text-accent-purple', hc: 'hover:text-accent-purple' },
+  { href: '/compare',     label: 'Comparar',    icon: GitCompare, ac: 'bg-accent-cyan/10 text-accent-cyan',     hc: 'hover:text-accent-cyan' },
+  { href: '/news',        label: 'Noticias',    icon: Newspaper,  ac: 'bg-accent-cyan/10 text-accent-cyan',     hc: 'hover:text-accent-cyan' },
+  { href: '/watchlist',   label: 'Portfolio',   icon: Briefcase,  ac: 'bg-accent-yellow/10 text-accent-yellow', hc: 'hover:text-accent-yellow' },
 ];
 
 // Bottom 5 for mobile tab bar
@@ -41,7 +41,7 @@ export default function Navbar() {
             </span>
           </Link>
 
-          {/* Desktop nav — hidden on mobile (replaced by bottom bar) */}
+          {/* Desktop nav */}
           <nav className="hidden md:flex items-center gap-0.5 overflow-x-auto scrollbar-none flex-1 justify-center">
             {LINKS.map(({ href, label, icon: Icon, ac, hc }) => {
               const active = pathname === href || (href !== '/' && pathname.startsWith(href));

@@ -10,7 +10,7 @@ import ValueScoreCard from '@/components/fundamental/ValueScoreCard';
 import type { FundamentalResponse } from '@/types/finance';
 import { formatPrice, formatLargeNumber, formatPercent } from '@/lib/indicators';
 import { clsx } from 'clsx';
-import { RefreshCw, AlertTriangle, Building2, Star, Brain, GitCompare, BarChart2 } from 'lucide-react';
+import { RefreshCw, AlertTriangle, Building2, Briefcase, Brain, GitCompare, BarChart2 } from 'lucide-react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 
 function Skeleton() {
@@ -134,11 +134,10 @@ function FundamentalContent() {
                 <p className="font-display font-bold text-2xl text-text-primary">${formatPrice(m.current_price)}</p>
                 <p className="text-xs text-text-muted font-mono">Cap: {formatLargeNumber(m.market_cap)}</p>
               </div>
-              <button onClick={toggleWatchlist}
-                className={clsx('flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono border transition-all',
-                  inWatchlist ? 'bg-accent-yellow/15 border-accent-yellow/40 text-accent-yellow' : 'border-border text-text-muted hover:text-accent-yellow hover:border-accent-yellow/30')}>
-                <Star className={clsx('w-3.5 h-3.5', inWatchlist && 'fill-accent-yellow')} />
-                {inWatchlist ? 'Guardado' : 'Watchlist'}
+              <button onClick={() => router.push('/watchlist')}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono border border-border text-text-muted hover:text-accent-yellow hover:border-accent-yellow/30 transition-all">
+                <Briefcase className="w-3.5 h-3.5" />
+                Portfolio
               </button>
               <button onClick={() => router.push(`/technical?ticker=${data.ticker}`)}
                 className="p-1.5 border border-border text-text-muted hover:text-accent-cyan hover:border-accent-cyan/30 rounded-lg transition-all">

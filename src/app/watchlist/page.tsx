@@ -118,20 +118,25 @@ function AddTradeModal({ onClose, onSave }: { onClose: () => void; onSave: (t: N
   }
 
   function handleSave() {
-    if (!form.ticker || !form.buy_date || !form.buy_shares || !form.buy_price || !form.buy_total) return;
-    const buyPrice = parseFloat(form.buy_price);
-    const mlPredPrice = parseFloat(form.ml_pred_price) || null;
+    // Normalize European decimal commas → dots before parsing
+    const norm = (s: string) => parseFloat(s.replace(',', '.'));
+    if (!form.ticker || !form.buy_date || !form.buy_shares || !form.buy_price || !form.buy_total) {
+      alert('Rellena los campos obligatorios: Ticker, Fecha, Nº acciones, Precio/acción y Total');
+      return;
+    }
+    const buyPrice = norm(form.buy_price);
+    const mlPredPrice = form.ml_pred_price ? norm(form.ml_pred_price) : null;
     const trade: NewTrade = {
       ticker:        form.ticker.toUpperCase(),
       broker:        form.broker,
       notes:         form.notes || null,
       buy_date:      form.buy_date,
-      buy_shares:    parseFloat(form.buy_shares),
+      buy_shares:    norm(form.buy_shares),
       buy_price:     buyPrice,
-      buy_total:     parseFloat(form.buy_total),
+      buy_total:     norm(form.buy_total),
       sell_date:     isSell && form.sell_date   ? form.sell_date   : null,
-      sell_price:    isSell && form.sell_price  ? parseFloat(form.sell_price)  : null,
-      sell_total:    isSell && form.sell_total  ? parseFloat(form.sell_total)  : null,
+      sell_price:    isSell && form.sell_price  ? norm(form.sell_price)  : null,
+      sell_total:    isSell && form.sell_total  ? norm(form.sell_total)  : null,
       ml_model:      form.ml_model || null,
       ml_days_ahead: parseInt(form.ml_days_ahead) || null,
       ml_target_date: form.ml_target_date || null,
@@ -190,7 +195,7 @@ function AddTradeModal({ onClose, onSave }: { onClose: () => void; onSave: (t: N
               </div>
               <div>
                 <label className={labelCls}>Total con comisiones *</label>
-                <input type="number" className={inputCls} value={form.buy_total} onChange={set('buy_total')} placeholder="1502.00" step="0.01" />
+                <input type="number" className={inputCls} value={form.buy_total} onChange={set('buy_total')} placeholder="1502.00" onBlur={e => setForm(f => ({ ...f, buy_total: e.target.value.replace(",", ".") }))} step="0.01" />
               </div>
             </div>
           </div>
@@ -217,7 +222,7 @@ function AddTradeModal({ onClose, onSave }: { onClose: () => void; onSave: (t: N
               </div>
               <div>
                 <label className={labelCls}>Total con comisiones</label>
-                <input type="number" className={inputCls} value={form.sell_total} onChange={set('sell_total')} placeholder="1698.00" step="0.01" />
+                <input type="number" className={inputCls} value={form.sell_total} onChange={set('sell_total')} placeholder="1698.00" step="0.01" onBlur={e => setForm(f => ({ ...f, sell_total: e.target.value.replace(",", ".") }))} />
               </div>
             </div>
           )}
@@ -251,11 +256,11 @@ function AddTradeModal({ onClose, onSave }: { onClose: () => void; onSave: (t: N
             {mlError && <p className="text-xs text-accent-red font-mono">{mlError}</p>}
             <div className="grid grid-cols-3 gap-3">
               <div>
-                <label className={labelCls}>Precio predicho</label>
+                <label className={labelCls}>Precio objetivo ML</label>
                 <input type="number" className={inputCls} value={form.ml_pred_price} onChange={set('ml_pred_price')} placeholder="auto" step="0.01" />
               </div>
               <div>
-                <label className={labelCls}>% predicho</label>
+                <label className={labelCls}>% vs compra (est.)</label>
                 <input type="number" className={inputCls} value={form.ml_pred_pct} onChange={set('ml_pred_pct')} placeholder="auto" step="0.01" />
               </div>
               <div>
