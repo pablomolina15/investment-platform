@@ -58,6 +58,14 @@ export default function MLPredictionChart({ prediction, historicalData, historyD
   // Bridge: last historical close = first prediction anchor
   const lastHistClose = histSlice[histSlice.length - 1]?.close;
 
+  console.log('DEBUG ML:', {
+  lastHistClose,
+  histSliceLength: histSlice.length,
+  lastPredPrice: predictions[predictions.length - 1]?.predicted_price,
+  firstPredPrice: predictions[0]?.predicted_price,
+  priceDiff: predictions[predictions.length - 1]?.predicted_price - (lastHistClose ?? 0),
+});
+
   const predPoints = predictions.map((p, i) => ({
     date: p.date,
     historical: i === 0 ? lastHistClose : undefined,
