@@ -5,97 +5,186 @@ import { useState, useCallback, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Navbar from '@/components/shared/Navbar';
 import TickerSearch from '@/components/shared/TickerSearch';
-import MetricCard from '@/components/fundamental/MetricCard';
-import ValueScoreCard from '@/components/fundamental/ValueScoreCard';
-import type { FundamentalResponse } from '@/types/finance';
-import { formatPrice, formatLargeNumber, formatPercent } from '@/lib/indicators';
+import SignalBadges from '@/components/shared/SignalBadges';
+import PriceChart from '@/components/charts/PriceChart';
+import RSIChart from '@/components/charts/RSIChart';
+import MACDChart from '@/components/charts/MACDChart';
+import type { TechnicalResponse, Period } from '@/types/finance';
+import { formatPrice, formatLargeNumber } from '@/lib/indicators';
 import { clsx } from 'clsx';
-import { RefreshCw, AlertTriangle, Building2, Briefcase, Brain, GitCompare, BarChart2 } from 'lucide-react';
+import { RefreshCw, Settings2, AlertTriangle, Briefcase, Brain, GitCompare } from 'lucide-react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
+
+// Extended periods including short-term
+const PERIODS: { label: string; value: Period | '1mo' | '5d' | '1d' }[] = [
+  { label: '1D',  value: '1d'  },
+  { label: '5D',  value: '5d'  },
+  { label: '1M',  value: '1mo' },
+  { label: '3M',  value: '3mo' },
+  { label: '6M',  value: '6mo' },
+  { label: '1A',  value: '1y'  },
+  { label: '2A',  value: '2y'  },
+];
+
+type AnyPeriod = '1d' | '5d' | '1mo' | '3mo' | '6mo' | '1y' | '2y';
 
 function Skeleton() {
   return (
-    <div className="space-y-4 animate-pulse">
+    <div className="space-y-3 animate-pulse">
+      <div className="skeleton h-14 rounded-xl" />
+      <div className="skeleton h-80 rounded-xl" />
       <div className="skeleton h-20 rounded-xl" />
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {Array.from({ length: 8 }).map((_, i) => <div key={i} className="skeleton h-28 rounded-xl" />)}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="skeleton h-44 rounded-xl" />
+        <div className="skeleton h-44 rounded-xl" />
       </div>
-      <div className="skeleton h-64 rounded-xl" />
     </div>
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function ArrowRight({ className }: { className?: string }) {
   return (
-    <div>
-      <h2 className="font-mono text-xs text-text-muted uppercase tracking-wider mb-3 flex items-center gap-2">
-        <span className="w-4 h-px bg-accent-green inline-block" /> {title}
-      </h2>
-      {children}
-    </div>
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+    </svg>
   );
 }
 
-function FundamentalContent() {
+function TechnicalContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const initTicker = (searchParams.get('ticker') ?? '').toUpperCase();
 
+  const [ticker, setTicker]           = useState(initTicker);
   const [inputTicker, setInputTicker] = useState(initTicker);
-  const [data, setData]       = useState<FundamentalResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState<string | null>(null);
-  const [watchlist, setWatchlist] = useLocalStorage<{ticker:string;addedAt:string}[]>('stocklens_watchlist', []);
+  const [period, setPeriod]           = useState<AnyPeriod>('1mo');
+  const [data, setData]               = useState<TechnicalResponse | null>(null);
+  const [loading, setLoading]         = useState(false);
+  const [error, setError]             = useState<string | null>(null);
+  const [showSMA50,  setShowSMA50]    = useState(true);
+  const [showSMA200, setShowSMA200]   = useState(false); // hidden by default for short periods
+  const [showEMA50,  setShowEMA50]    = useState(false);
+  const [showBB,     setShowBB]       = useState(true);
+  const [watchlist, setWatchlist]     = useLocalStorage<{ticker:string;addedAt:string}[]>('stocklens_watchlist', []);
 
-  const fetchData = useCallback(async (t: string) => {
+  const fetchData = useCallback(async (t: string, p: AnyPeriod) => {
     if (!t.trim()) return;
     setLoading(true); setError(null);
     try {
-      const res = await fetch(`/api/fundamentals?ticker=${t.trim().toUpperCase()}`);
+      // Map short periods to API-compatible values
+      const apiPeriod = p === '1d' ? '5d' : p === '5d' ? '1mo' : p === '1mo' ? '3mo' : p;
+      const res = await fetch(`/api/prices?ticker=${t.trim().toUpperCase()}&period=${apiPeriod}`);
       if (!res.ok) throw new Error(`Error ${res.status}`);
-      setData(await res.json());
+      const json: TechnicalResponse = await res.json();
+
+      // Slice data for shorter periods
+      const now = new Date();
+      let cutoff: Date | null = null;
+      if (p === '1d')  cutoff = new Date(now.getTime() - 1   * 24 * 60 * 60 * 1000);
+      if (p === '5d')  cutoff = new Date(now.getTime() - 5   * 24 * 60 * 60 * 1000);
+      if (p === '1mo') cutoff = new Date(now.getTime() - 30  * 24 * 60 * 60 * 1000);
+
+      if (cutoff) {
+        json.data = json.data.filter(d => new Date(d.date) >= cutoff!);
+      }
+
+      setData(json);
+      setTicker(t.trim().toUpperCase());
+      // Auto-hide SMA200 for short periods (not enough data)
+      setShowSMA200(p !== '1d' && p !== '5d' && p !== '1mo');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error desconocido');
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false); }
   }, []);
 
-  useEffect(() => { if (initTicker) fetchData(initTicker); }, []); // eslint-disable-line
+  useEffect(() => {
+    if (initTicker) fetchData(initTicker, period);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSubmit = (t: string) => {
-    fetchData(t);
-    router.replace(`/fundamental?ticker=${t.toUpperCase()}`);
+    fetchData(t, period);
+    router.replace(`/technical?ticker=${t.toUpperCase()}`);
+  };
+  const handlePeriod = (p: AnyPeriod) => {
+    setPeriod(p);
+    if (ticker) fetchData(ticker, p);
   };
 
-  const ticker = data?.ticker ?? '';
   const inWatchlist = watchlist.some(w => w.ticker === ticker);
   function toggleWatchlist() {
-    if (inWatchlist) setWatchlist(p => p.filter(w => w.ticker !== ticker));
-    else setWatchlist(p => [...p, { ticker, addedAt: new Date().toISOString() }]);
+    if (inWatchlist) setWatchlist(prev => prev.filter(w => w.ticker !== ticker));
+    else setWatchlist(prev => [...prev, { ticker, addedAt: new Date().toISOString() }]);
   }
 
-  const m = data?.metrics;
-  const peColor     = (v: number | null | undefined) => !v ? 'none' as const : v < 15 ? 'green' as const : v < 25 ? 'cyan' as const : v < 40 ? 'yellow' as const : 'red' as const;
-  const marginColor = (v: number | null | undefined) => { if (!v) return 'none' as const; const p = v < 1 ? v*100 : v; return p > 20 ? 'green' as const : p > 5 ? 'cyan' as const : 'red' as const; };
-  const debtColor   = (v: number | null | undefined) => !v ? 'none' as const : v < 50 ? 'green' as const : v < 100 ? 'yellow' as const : 'red' as const;
-  const roeColor    = (v: number | null | undefined) => { if (!v) return 'none' as const; const p = v < 1 ? v*100 : v; return p > 20 ? 'green' as const : p > 10 ? 'cyan' as const : 'red' as const; };
-  const growthColor = (v: number | null | undefined) => !v ? 'none' as const : v > 10 ? 'green' as const : v > 0 ? 'cyan' as const : 'red' as const;
+  const last  = data?.data[data.data.length - 1];
+  const prev  = data?.data[data.data.length - 2];
+  const priceChange    = last && prev ? last.close - prev.close : null;
+  const priceChangePct = last && prev ? ((last.close - prev.close) / prev.close) * 100 : null;
+
+  const isShortPeriod = period === '1d' || period === '5d' || period === '1mo';
 
   return (
     <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-20 pb-12">
-      <div className="mb-6 animate-slide-up opacity-0" style={{ animationFillMode: 'forwards' }}>
-        <h1 className="font-display font-bold text-3xl sm:text-4xl mb-1">
-          Análisis <span className="text-accent-green">Fundamental</span>
+      <div className="mb-5 animate-slide-up opacity-0" style={{ animationFillMode: 'forwards' }}>
+        <h1 className="font-display font-bold text-2xl sm:text-4xl mb-1">
+          Análisis <span className="text-accent-cyan">Técnico</span>
         </h1>
-        <p className="text-text-secondary text-sm">Salud financiera y Value Investing checklist</p>
+        <p className="text-text-secondary text-sm hidden sm:block">Indicadores, patrones y señales del mercado</p>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-3 mb-6 animate-slide-up opacity-0" style={{ animationDelay: '60ms', animationFillMode: 'forwards' }}>
-        <TickerSearch value={inputTicker} onChange={setInputTicker} onSubmit={handleSubmit} />
-        <button onClick={() => handleSubmit(inputTicker)} disabled={loading}
-          className="flex items-center gap-2 px-4 py-2 bg-accent-green/10 border border-accent-green/30 text-accent-green rounded-lg text-sm font-mono hover:bg-accent-green/20 transition-all disabled:opacity-40">
-          <RefreshCw className={clsx('w-3.5 h-3.5', loading && 'animate-spin')} />
-          {loading ? 'Cargando…' : 'Analizar'}
-        </button>
+      {/* Controls — stacked on mobile */}
+      <div className="space-y-3 mb-4 animate-slide-up opacity-0" style={{ animationDelay: '60ms', animationFillMode: 'forwards' }}>
+        <div className="flex gap-2">
+          <div className="flex-1">
+            <TickerSearch value={inputTicker} onChange={setInputTicker} onSubmit={handleSubmit} />
+          </div>
+          <button onClick={() => fetchData(ticker, period)} disabled={loading}
+            className="flex items-center gap-1.5 px-3 py-2 bg-accent-cyan/10 border border-accent-cyan/30 text-accent-cyan rounded-lg text-sm font-mono hover:bg-accent-cyan/20 transition-all disabled:opacity-40 flex-shrink-0">
+            <RefreshCw className={clsx('w-3.5 h-3.5', loading && 'animate-spin')} />
+            <span className="hidden sm:inline">{loading ? 'Cargando…' : 'Actualizar'}</span>
+          </button>
+        </div>
+
+        {/* Period selector — horizontal scroll on mobile */}
+        <div className="flex items-center gap-1 bg-bg-card border border-border rounded-lg p-1 overflow-x-auto scrollbar-none">
+          {PERIODS.map(p => (
+            <button key={p.value} onClick={() => handlePeriod(p.value as AnyPeriod)}
+              className={clsx(
+                'px-3 py-1.5 rounded-md text-xs font-mono transition-all whitespace-nowrap flex-shrink-0',
+                period === p.value
+                  ? 'bg-accent-cyan/20 text-accent-cyan border border-accent-cyan/30'
+                  : 'text-text-muted hover:text-text-primary'
+              )}>
+              {p.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Indicator toggles — scroll on mobile */}
+      <div className="flex gap-2 mb-4 overflow-x-auto scrollbar-none animate-fade-in opacity-0 pb-1"
+        style={{ animationDelay: '120ms', animationFillMode: 'forwards' }}>
+        {[
+          { label: 'SMA 50',    active: showSMA50,  toggle: () => setShowSMA50(v=>!v),  color: '#ffd166' },
+          { label: 'SMA 200',   active: showSMA200, toggle: () => setShowSMA200(v=>!v), color: '#ff3b6b', dim: isShortPeriod },
+          { label: 'EMA 50',    active: showEMA50,  toggle: () => setShowEMA50(v=>!v),  color: '#7b61ff' },
+          { label: 'Bollinger', active: showBB,     toggle: () => setShowBB(v=>!v),     color: '#7b61ff' },
+        ].map(item => (
+          <button key={item.label} onClick={item.toggle}
+            className={clsx(
+              'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-mono border transition-all flex-shrink-0',
+              item.active ? 'bg-bg-elevated border-border-bright text-text-primary' : 'border-border text-text-muted opacity-50',
+              item.dim && 'opacity-30'
+            )}>
+            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: item.active ? item.color : '#4a4a6a' }} />
+            {item.label}
+          </button>
+        ))}
+        <div className="ml-auto flex items-center gap-1.5 text-xs font-mono text-text-muted flex-shrink-0">
+          <Settings2 className="w-3.5 h-3.5" />
+        </div>
       </div>
 
       {error && (
@@ -105,121 +194,87 @@ function FundamentalContent() {
       )}
 
       {!data && !loading && !error && (
-        <div className="text-center py-24">
-          <div className="text-6xl mb-4">📊</div>
-          <p className="font-display text-xl text-text-secondary mb-2">Introduce un ticker para analizar</p>
-          <p className="text-sm text-text-muted font-mono">Métricas fundamentales + Value Score automático</p>
+        <div className="text-center py-20">
+          <div className="text-5xl mb-4">📈</div>
+          <p className="font-display text-xl text-text-secondary mb-2">Busca un ticker para comenzar</p>
+          <p className="text-sm text-text-muted font-mono">Ej: AAPL, MSFT, NVDA, TSLA…</p>
         </div>
       )}
 
       {loading && <Skeleton />}
 
-      {data && !loading && m && (
-        <div className="space-y-5 animate-fade-in opacity-0" style={{ animationFillMode: 'forwards' }}>
-          {/* Company header */}
-          <div className="bg-bg-card border border-border rounded-xl p-5 flex flex-wrap items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-bg-elevated border border-border flex items-center justify-center">
-              <Building2 className="w-6 h-6 text-accent-green" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="font-display font-bold text-xl text-text-primary">{data.company_name}</h2>
-                <span className="font-mono text-sm text-accent-cyan bg-accent-cyan/10 px-2 py-0.5 rounded border border-accent-cyan/20">{data.ticker}</span>
-                {data.source === 'demo' && <span className="text-xs font-mono bg-accent-yellow/10 border border-accent-yellow/30 text-accent-yellow px-2 py-0.5 rounded-full">DEMO</span>}
+      {data && !loading && (
+        <div className="space-y-3 animate-fade-in opacity-0" style={{ animationFillMode: 'forwards' }}>
+          {/* Price bar */}
+          <div className="bg-bg-card border border-border rounded-xl px-4 py-3">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <div className="flex items-center gap-2">
+                <span className="font-display font-bold text-xl text-text-primary">{data.ticker}</span>
+                {data.source === 'demo' && (
+                  <span className="text-xs font-mono bg-accent-yellow/10 border border-accent-yellow/30 text-accent-yellow px-2 py-0.5 rounded-full">DEMO</span>
+                )}
               </div>
-              <p className="text-sm text-text-muted font-mono mt-0.5">{data.sector} · {data.industry}</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="text-right mr-2">
-                <p className="font-display font-bold text-2xl text-text-primary">${formatPrice(m.current_price)}</p>
-                <p className="text-xs text-text-muted font-mono">Cap: {formatLargeNumber(m.market_cap)}</p>
+              {last && (
+                <div className="flex items-baseline gap-2">
+                  <span className="font-mono font-bold text-lg text-text-primary">${formatPrice(last.close)}</span>
+                  {priceChange !== null && (
+                    <span className={clsx('text-sm font-mono', priceChange >= 0 ? 'text-accent-green' : 'text-accent-red')}>
+                      {priceChange >= 0 ? '+' : ''}{formatPrice(priceChange)} ({priceChangePct?.toFixed(2)}%)
+                    </span>
+                  )}
+                </div>
+              )}
+              {last && (
+                <div className="flex gap-3 text-xs font-mono text-text-muted">
+                  <span>Vol: <span className="text-text-secondary">{formatLargeNumber(last.volume)}</span></span>
+                  <span className="hidden sm:inline">H: <span className="text-text-secondary">${formatPrice(last.high)}</span></span>
+                  <span className="hidden sm:inline">L: <span className="text-text-secondary">${formatPrice(last.low)}</span></span>
+                </div>
+              )}
+              {/* Action buttons — scrollable on mobile */}
+              <div className="flex gap-1.5 ml-auto overflow-x-auto scrollbar-none">
+                <button onClick={() => router.push('/watchlist')}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-mono border border-border text-text-muted hover:border-accent-yellow/30 hover:text-accent-yellow transition-all flex-shrink-0">
+                  <Briefcase className="w-3 h-3" />
+                  <span className="hidden sm:inline">Portfolio</span>
+                </button>
+                <button onClick={() => router.push(`/ml?ticker=${data.ticker}`)}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-mono border border-border text-text-muted hover:border-accent-purple/30 hover:text-accent-purple transition-all flex-shrink-0">
+                  <Brain className="w-3 h-3" />
+                  <span className="hidden sm:inline">Predecir</span>
+                </button>
+                <button onClick={() => router.push(`/compare?tickers=${data.ticker}`)}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-mono border border-border text-text-muted hover:border-accent-yellow/30 hover:text-accent-yellow transition-all flex-shrink-0">
+                  <GitCompare className="w-3 h-3" />
+                  <span className="hidden sm:inline">Comparar</span>
+                </button>
               </div>
-              <button onClick={() => router.push('/watchlist')}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono border border-border text-text-muted hover:text-accent-yellow hover:border-accent-yellow/30 transition-all">
-                <Briefcase className="w-3.5 h-3.5" />
-                Portfolio
-              </button>
-              <button onClick={() => router.push(`/technical?ticker=${data.ticker}`)}
-                className="p-1.5 border border-border text-text-muted hover:text-accent-cyan hover:border-accent-cyan/30 rounded-lg transition-all">
-                <BarChart2 className="w-4 h-4" />
-              </button>
-              <button onClick={() => router.push(`/ml?ticker=${data.ticker}`)}
-                className="p-1.5 border border-border text-text-muted hover:text-accent-purple hover:border-accent-purple/30 rounded-lg transition-all">
-                <Brain className="w-4 h-4" />
-              </button>
-              <button onClick={() => router.push(`/compare?tickers=${data.ticker}`)}
-                className="p-1.5 border border-border text-text-muted hover:text-accent-yellow hover:border-accent-yellow/30 rounded-lg transition-all">
-                <GitCompare className="w-4 h-4" />
-              </button>
             </div>
           </div>
 
-          {/* 52w range */}
-          {m.week52_high && m.week52_low && m.current_price && (
-            <div className="bg-bg-card border border-border rounded-xl px-5 py-4">
-              <p className="text-xs font-mono text-text-muted mb-3">Rango 52 semanas</p>
-              <div className="flex items-center gap-3">
-                <span className="text-xs font-mono text-accent-red">${formatPrice(m.week52_low)}</span>
-                <div className="flex-1 h-2 bg-bg-elevated rounded-full overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-accent-red via-accent-yellow to-accent-green rounded-full"
-                    style={{ width: `${Math.min(100, Math.max(0, ((m.current_price - m.week52_low) / (m.week52_high - m.week52_low)) * 100))}%` }} />
-                </div>
-                <span className="text-xs font-mono text-accent-green">${formatPrice(m.week52_high)}</span>
-              </div>
-              <p className="text-center text-xs font-mono text-text-muted mt-1">
-                Actual ${formatPrice(m.current_price)} · {(((m.current_price - m.week52_low) / (m.week52_high - m.week52_low)) * 100).toFixed(0)}% del rango
-              </p>
-            </div>
-          )}
+          {data.signals && <SignalBadges signals={data.signals} />}
 
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-            <div className="xl:col-span-2 space-y-5">
-              <Section title="Valoración">
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 stagger">
-                  <MetricCard label="PER (P/E)"    value={m.pe_ratio    ? m.pe_ratio.toFixed(1)    : 'N/A'} highlight={peColor(m.pe_ratio)}     description="Precio / Beneficio"          animationDelay={0} />
-                  <MetricCard label="PER Forward"  value={m.forward_pe  ? m.forward_pe.toFixed(1)  : 'N/A'}                                       description="Estimado próximo año"         animationDelay={50} />
-                  <MetricCard label="P/Book"       value={m.pb_ratio    ? m.pb_ratio.toFixed(2)    : 'N/A'} highlight={m.pb_ratio && m.pb_ratio < 3 ? 'green' : m.pb_ratio && m.pb_ratio < 6 ? 'yellow' : 'red'} description="Precio / Valor contable" animationDelay={100} />
-                  <MetricCard label="P/Ventas"     value={m.ps_ratio    ? m.ps_ratio.toFixed(2)    : 'N/A'}                                       description="Price to Sales"               animationDelay={150} />
-                  <MetricCard label="PEG Ratio"    value={m.peg_ratio   ? m.peg_ratio.toFixed(2)   : 'N/A'} highlight={m.peg_ratio && m.peg_ratio < 1.5 ? 'green' : m.peg_ratio && m.peg_ratio < 2.5 ? 'yellow' : 'red'} description="P/E ajustado al crecimiento" animationDelay={200} />
-                  <MetricCard label="EPS"          value={m.eps         ? `$${formatPrice(m.eps)}` : 'N/A'} trend={m.eps && m.eps > 0 ? 'up' : 'down'} description="Beneficio por acción"    animationDelay={250} />
-                </div>
-              </Section>
-              <Section title="Rentabilidad">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 stagger">
-                  <MetricCard label="Margen Neto"      value={m.profit_margin    != null ? formatPercent(m.profit_margin)    : 'N/A'} highlight={marginColor(m.profit_margin)}  animationDelay={0} />
-                  <MetricCard label="Margen Operativo" value={m.operating_margin != null ? formatPercent(m.operating_margin) : 'N/A'}                                            animationDelay={50} />
-                  <MetricCard label="ROE"              value={m.roe              != null ? formatPercent(m.roe)              : 'N/A'} highlight={roeColor(m.roe)} description="Return on Equity"   animationDelay={100} />
-                  <MetricCard label="ROA"              value={m.roa              != null ? formatPercent(m.roa)              : 'N/A'}                             description="Return on Assets"   animationDelay={150} />
-                </div>
-              </Section>
-              <Section title="Deuda y Liquidez">
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 stagger">
-                  <MetricCard label="Deuda/Equity"  value={m.debt_to_equity != null ? `${m.debt_to_equity.toFixed(1)}%` : 'N/A'} highlight={debtColor(m.debt_to_equity)} animationDelay={0} />
-                  <MetricCard label="Current Ratio" value={m.current_ratio  != null ? m.current_ratio.toFixed(2)        : 'N/A'} highlight={m.current_ratio && m.current_ratio > 1.5 ? 'green' : m.current_ratio && m.current_ratio > 1 ? 'yellow' : 'red'} description="Liquidez a corto" animationDelay={50} />
-                  <MetricCard label="Quick Ratio"   value={m.quick_ratio   != null ? m.quick_ratio.toFixed(2)           : 'N/A'} description="Liquidez inmediata" animationDelay={100} />
-                </div>
-              </Section>
-              <Section title="Crecimiento y Dividendos">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 stagger">
-                  <MetricCard label="Crecimiento YoY"  value={m.revenue_growth_yoy != null ? formatPercent(m.revenue_growth_yoy, 1) : 'N/A'} trend={m.revenue_growth_yoy != null ? (m.revenue_growth_yoy > 0 ? 'up' : 'down') : undefined} highlight={growthColor(m.revenue_growth_yoy)} description="Ingresos año sobre año" animationDelay={0} />
-                  <MetricCard label="Crec. Beneficios" value={m.earnings_growth    != null ? formatPercent(m.earnings_growth, 1)    : 'N/A'} trend={m.earnings_growth != null ? (m.earnings_growth > 0 ? 'up' : 'down') : undefined} animationDelay={50} />
-                  <MetricCard label="Dividend Yield"   value={m.dividend_yield     != null ? formatPercent(m.dividend_yield)         : '—'}   highlight={m.dividend_yield && (m.dividend_yield < 1 ? m.dividend_yield*100 : m.dividend_yield) > 1 ? 'cyan' : 'none'} description="Rentabilidad dividendo" animationDelay={100} />
-                  <MetricCard label="Payout Ratio"     value={m.payout_ratio       != null ? formatPercent(m.payout_ratio)           : '—'}   description="% beneficio repartido" animationDelay={150} />
-                </div>
-              </Section>
+          <div className="bg-bg-card border border-border rounded-xl p-3 sm:p-5">
+            <PriceChart data={data.data} showSMA50={showSMA50} showSMA200={showSMA200} showEMA50={showEMA50} showBB={showBB} />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="bg-bg-card border border-border rounded-xl p-3 sm:p-5"><RSIChart data={data.data} /></div>
+            <div className="bg-bg-card border border-border rounded-xl p-3 sm:p-5"><MACDChart data={data.data} /></div>
+          </div>
+
+          <div className="bg-bg-card border border-dashed border-border-bright rounded-xl p-4 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-accent-purple/10 border border-accent-purple/30 flex items-center justify-center flex-shrink-0">
+              <Brain className="w-4 h-4 text-accent-purple" />
             </div>
-            <div className="xl:col-span-1 space-y-4">
-              <Section title="Value Investing Score">
-                <ValueScoreCard valueScore={data.value_score} />
-              </Section>
-              <div className="bg-bg-card border border-border rounded-xl p-4">
-                <p className="text-xs font-mono text-text-muted uppercase tracking-wider mb-2">Actualización</p>
-                <p className="text-xs font-mono text-text-secondary">{new Date(data.last_updated).toLocaleString('es-ES')}</p>
-                <p className="text-xs font-mono text-text-muted mt-1">
-                  Fuente: {data.source === 'demo' ? 'Datos demo' : data.source === 'cache' ? 'Caché Supabase' : 'Yahoo Finance'}
-                </p>
-              </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-mono font-bold text-sm text-accent-purple">Predicción ML disponible</p>
+              <p className="text-xs text-text-muted mt-0.5 hidden sm:block">Random Forest, Gradient Boosting y LSTM a {period === '1d' || period === '5d' ? '3-5' : '5-15'} días.</p>
             </div>
+            <button onClick={() => router.push(`/ml?ticker=${data.ticker}`)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-accent-purple/15 border border-accent-purple/40 text-accent-purple rounded-lg text-xs font-mono hover:bg-accent-purple/25 transition-all flex-shrink-0">
+              IA <ArrowRight className="w-3 h-3" />
+            </button>
           </div>
         </div>
       )}
@@ -227,22 +282,20 @@ function FundamentalContent() {
   );
 }
 
-export default function FundamentalPage() {
+export default function TechnicalPage() {
   return (
     <div className="min-h-screen bg-bg-primary bg-grid">
       <Navbar />
       <Suspense fallback={
         <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-20 pb-12">
-          <div className="space-y-3 animate-pulse mt-8">
-            <div className="skeleton h-10 w-64 rounded-xl" />
-            <div className="skeleton h-20 rounded-xl" />
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              {Array.from({ length: 8 }).map((_, i) => <div key={i} className="skeleton h-28 rounded-xl" />)}
-            </div>
+          <div className="space-y-3 animate-pulse mt-6">
+            <div className="skeleton h-8 w-48 rounded-xl" />
+            <div className="skeleton h-10 rounded-xl" />
+            <div className="skeleton h-80 rounded-xl" />
           </div>
         </main>
       }>
-        <FundamentalContent />
+        <TechnicalContent />
       </Suspense>
     </div>
   );
