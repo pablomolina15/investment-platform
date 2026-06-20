@@ -32,7 +32,9 @@ export async function POST(req: NextRequest) {
       });
       if (res.ok) {
         const data = await res.json();
-        return NextResponse.json({ ...data, source: 'live' });
+        return NextResponse.json({ ...data, source: 'live' }, {
+          headers: { 'Cache-Control': 'no-store' },
+        });
       }
       const errText = await res.text().catch(() => '');
       console.error(`[ml-predict] Railway ${res.status} for ${ticker}/${model}: ${errText.slice(0, 200)}`);
