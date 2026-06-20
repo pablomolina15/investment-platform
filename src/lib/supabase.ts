@@ -121,11 +121,11 @@ export interface PortfolioTrade {
 }
 
 export type NewTrade = Omit<PortfolioTrade, 'id' | 'user_id' | 'created_at' | 'updated_at'>;
-
 export async function getPortfolioTrades(userId: string): Promise<PortfolioTrade[]> {
   if (!supabaseUrl) return [];
   try {
-    const { data, error } = await supabase
+    const client = createSupabaseBrowser();
+    const { data, error } = await client
       .from('portfolio_trades')
       .select('*')
       .eq('user_id', userId)
@@ -138,13 +138,11 @@ export async function getPortfolioTrades(userId: string): Promise<PortfolioTrade
   }
 }
 
-export async function addPortfolioTrade(
-  userId: string,
-  trade: NewTrade,
-): Promise<PortfolioTrade | null> {
+export async function addPortfolioTrade(userId: string, trade: NewTrade): Promise<PortfolioTrade | null> {
   if (!supabaseUrl) return null;
   try {
-    const { data, error } = await supabase
+    const client = createSupabaseBrowser();
+    const { data, error } = await client
       .from('portfolio_trades')
       .insert({ ...trade, user_id: userId })
       .select()
@@ -157,13 +155,11 @@ export async function addPortfolioTrade(
   }
 }
 
-export async function updatePortfolioTrade(
-  tradeId: string,
-  updates: Partial<NewTrade>,
-): Promise<boolean> {
+export async function updatePortfolioTrade(tradeId: string, updates: Partial<NewTrade>): Promise<boolean> {
   if (!supabaseUrl) return false;
   try {
-    const { error } = await supabase
+    const client = createSupabaseBrowser();
+    const { error } = await client
       .from('portfolio_trades')
       .update(updates)
       .eq('id', tradeId);
@@ -178,7 +174,8 @@ export async function updatePortfolioTrade(
 export async function deletePortfolioTrade(tradeId: string): Promise<boolean> {
   if (!supabaseUrl) return false;
   try {
-    const { error } = await supabase
+    const client = createSupabaseBrowser();
+    const { error } = await client
       .from('portfolio_trades')
       .delete()
       .eq('id', tradeId);
