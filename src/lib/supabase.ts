@@ -92,3 +92,100 @@ export async function removeFromCloudWatchlist(userId: string, ticker: string) {
       .eq('user_id', userId).eq('ticker', ticker.toUpperCase());
   } catch { /**/ }
 }
+// ── Añade esto al final de src/lib/supabase.ts ──────────────────────────────
+
+export interface PortfolioTrade {
+  id: string;
+  user_id: string;
+  ticker: string;
+  broker: string;
+  notes: string | null;
+  // Buy
+  buy_date: string;
+  buy_shares: number;
+  buy_price: number;
+  buy_total: number;
+  // Sell (null = open position)
+  sell_date: string | null;
+  sell_price: number | null;
+  sell_total: number | null;
+  // ML prediction
+  ml_model: string | null;
+  ml_days_ahead: number | null;
+  ml_target_date: string | null;
+  ml_pred_price: number | null;
+  ml_pred_pct: number | null;
+  // Meta
+  created_at: string;
+  updated_at: string;
+}
+
+export type NewTrade = Omit<PortfolioTrade, 'id' | 'user_id' | 'created_at' | 'updated_at'>;
+
+export async function getPortfolioTrades(userId: string): Promise<PortfolioTrade[]> {
+  if (!supabaseUrl) return [];
+  try {
+    const { data, error } = await supabase
+      .from('portfolio_trades')
+      .select('*')
+      .eq('user_id', userId)
+      .order('buy_date', { ascending: false });
+    if (error) throw error;
+    return (data as PortfolioTrade[]) ?? [];
+  } catch (e) {
+    console.error('[portfolio] getPortfolioTrades:', e);
+    return [];
+  }
+}
+
+export async function addPortfolioTrade(
+  userId: string,
+  trade: NewTrade,
+): Promise<PortfolioTrade | null> {
+  if (!supabaseUrl) return null;
+  try {
+    const { data, error } = await supabase
+      .from('portfolio_trades')
+      .insert({ ...trade, user_id: userId })
+      .select()
+      .single();
+    if (error) throw error;
+    return data as PortfolioTrade;
+  } catch (e) {
+    console.error('[portfolio] addPortfolioTrade:', e);
+    return null;
+  }
+}
+
+export async function updatePortfolioTrade(
+  tradeId: string,
+  updates: Partial<NewTrade>,
+): Promise<boolean> {
+  if (!supabaseUrl) return false;
+  try {
+    const { error } = await supabase
+      .from('portfolio_trades')
+      .update(updates)
+      .eq('id', tradeId);
+    if (error) throw error;
+    return true;
+  } catch (e) {
+    console.error('[portfolio] updatePortfolioTrade:', e);
+    return false;
+  }
+}
+
+export async function deletePortfolioTrade(tradeId: string): Promise<boolean> {
+  if (!supabaseUrl) return false;
+  try {
+    const { error } = await supabase
+      .from('portfolio_trades')
+      .delete()
+      .eq('id', tradeId);
+    if (error) throw error;
+    return true;
+  } catch (e) {
+    console.error('[portfolio] deletePortfolioTrade:', e);
+    return false;
+  }
+}
