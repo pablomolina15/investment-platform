@@ -71,10 +71,13 @@ export default function MLPredictionChart({ prediction, historicalData, historyD
   const chartData = [...histPoints, ...predPoints];
 
   // Price direction
-  const lastPred = predictions[predictions.length - 1];
-  const priceDiff = lastPred && lastHistClose
-    ? lastPred.predicted_price - lastHistClose : 0;
-  const pricePct = lastHistClose ? (priceDiff / lastHistClose) * 100 : 0;
+const lastPred = predictions[predictions.length - 1];
+  // Usar el precio de referencia más fiable: último histórico del gráfico,
+  // o si no hay datos técnicos, el primer punto predicho como anchor
+  const referencePrice = lastHistClose ?? predictions[0]?.predicted_price ?? 0;
+  const priceDiff = lastPred && referencePrice
+    ? lastPred.predicted_price - referencePrice : 0;
+  const pricePct = referencePrice ? (priceDiff / referencePrice) * 100 : 0;
   const bullish = priceDiff >= 0;
 
   // Feature importance top 6
@@ -101,7 +104,7 @@ export default function MLPredictionChart({ prediction, historicalData, historyD
         {[
           {
             label: 'Precio actual',
-            value: `$${formatPrice(lastHistClose)}`,
+            value: `$${formatPrice(referencePrice)}`,
             sub: 'Último cierre',
             color: 'text-text-primary',
           },
