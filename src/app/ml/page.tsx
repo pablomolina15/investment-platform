@@ -17,7 +17,7 @@ const MODELS = [
   { id: 'lstm',              name: 'LSTM Neural Net',   icon: Network, description: 'Red neuronal recurrente con Monte Carlo Dropout. Captura dependencias temporales largas.', tags: ['~60-90s', 'Deep Learning', 'MC Dropout CI'],  color: 'green', badge: 'NEW' },
 ];
 
-const DAY_OPTIONS = [3, 5, 10, 15, 20];
+const DAY_OPTIONS = [1, 3, 5, 10];
 
 const modelColorMap: Record<string, { active: string; icon: string; tag: string }> = {
   cyan:   { active: 'border-accent-cyan/50 bg-accent-cyan/8',    icon: 'text-accent-cyan bg-accent-cyan/15 border-accent-cyan/30',     tag: 'text-accent-cyan'   },
