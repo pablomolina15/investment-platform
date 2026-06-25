@@ -129,9 +129,15 @@ const lastPred = predictions[predictions.length - 1];
             color: bullish ? 'text-accent-green' : 'text-accent-red',
           },
           {
-            label: 'MAPE modelo',
-            value: accuracy_metrics?.mape != null ? `${accuracy_metrics.mape.toFixed(1)}%` : 'N/A',
-            sub: `${accuracy_metrics?.train_samples ?? '—'} muestras`,
+            label: accuracy_metrics?.direction_acc_pct != null ? 'Dir. Accuracy' : 'MAPE modelo',
+            value: accuracy_metrics?.direction_acc_pct != null
+              ? `${accuracy_metrics.direction_acc_pct.toFixed(1)}%`
+              : accuracy_metrics?.mape != null
+              ? `${accuracy_metrics.mape.toFixed(1)}%`
+              : 'N/A',
+            sub: accuracy_metrics?.direction_acc_pct != null
+              ? `Dir. accuracy`
+              : `${accuracy_metrics?.train_samples ?? '—'} muestras`,
             color: 'text-accent-yellow',
           },
         ].map(item => (
