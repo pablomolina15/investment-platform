@@ -346,6 +346,7 @@ function TradeRow({ trade, onDelete, onClose }: {
         <div className="bg-bg-elevated rounded-lg p-2">
           <p className="text-text-muted mb-0.5">Compra</p>
           <p className="text-text-primary font-bold">{fmtUSD(trade.buy_price)}/acc</p>
+          <p className="text-text-muted">{trade.buy_date}</p>
           <p className="text-text-muted">{trade.buy_shares} acc · {fmtUSD(trade.buy_total)}</p>
         </div>
 
@@ -363,6 +364,7 @@ function TradeRow({ trade, onDelete, onClose }: {
           <div className="bg-bg-elevated rounded-lg p-2">
             <p className="text-text-muted mb-0.5">Venta</p>
             <p className="text-text-primary font-bold">{fmtUSD(trade.sell_price)}/acc</p>
+            <p className="text-text-muted">{trade.sell_date}</p>
             <p className="text-text-muted">{fmtUSD(trade.sell_total)}</p>
           </div>
         )}
